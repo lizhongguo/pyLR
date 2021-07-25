@@ -125,6 +125,8 @@ def constructFirstSet(rules:dict[VN,Rule]):
 
 # 构造Follow集
 def constructFollowSet():
+    # 首先在开始规则的Follow集放入 $
+    # 遍历所有规则, 更新Follow集合,直到Follow集合不再更新
     pass
 
 # LR(1)
