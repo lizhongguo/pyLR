@@ -84,11 +84,12 @@ class LRDFA:
         pass
 
 # 构造First集
-def constructFirstSet(rules:list[Rule]):
+def constructFirstSet(rules:dict[VN,Rule]):
     updated = True
     First = dict()
     while updated:
-        for rule in rules:
+        for parentVN in rules:
+            rule = rules[parentVN]
             for child in rule.children:
                 for token in child:
                     # 终结符
@@ -103,14 +104,24 @@ def constructFirstSet(rules:list[Rule]):
                         First[rule.parent].add(token)
                         updated = True
 
+                        break
+
                     elif isinstance(token, VN):
                         if token not in First:
                             First[token] = set()
-                        
+                            continue
+
+                        # 空集是任何集合的子集                        
                         if First[token].issubset(First[rule.parent]):
                             continue
 
+                        First[rule.parent] |= First[token]
                         updated=True
+
+                        # 可推出sigma空集，继续
+                        if set() not in rules[token]:
+                            break
+
 
 # 构造Follow集
 def constructFollowSet():
