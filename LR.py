@@ -156,6 +156,7 @@ def constructFollowSet(rules:dict[VN,Rule], beginning:VN):
 
                     if tailIsEmpty:
                         Follow[parentVN] |= first - EPSILON
+                        Follow[token] |= Follow[parentVN]
 
                     followToken = token
 
