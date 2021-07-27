@@ -159,10 +159,42 @@ def testConstructFirstSet():
     print(constructFirstSet(rules))
 
 # 构造Follow集
-def constructFollowSet():
+def constructFollowSet(rules:dict[VN,Rule], beginning:VN):
     # 首先在开始规则的Follow集放入 $
     # 遍历所有规则, 更新Follow集合,直到Follow集合不再更新
-    pass
+    updated = True
+    Follow = dict()
+    # 加入$，表示结束
+    Follow[beginning] = END
+
+    while updated:
+        for parentVN in rules:
+            rule = rules[parentVN]
+            for child in rule.children:
+                # 从后往前遍历规则，更新Follow集合
+                first = set()
+                followToken = None
+                tailIsEmpty = True
+
+                for token in reversed(child):
+                    if followToken:
+                        if isinstance(token, VN):
+                            Follow[token] |= first - EPSILON
+                    
+                    # 终结符的First集合是它本身
+                    if (EPSILON,) in rules[token].children:
+                        first |= First[token] - EPSILON
+                    else:
+                        fisrt = First[token]
+                        tailIsEmpty = False
+
+                    if tailIsEmpty:
+                        Follow[parentVN] |= first - EPSILON
+                        Follow[token] |= Follow[parentVN]
+
+                    followToken = token
+
+
 
 # LR(1)
 # 构建LR-有限状态自动机, 输入为文法规则, 文法规则 : VN -> VN VT混合序列;
