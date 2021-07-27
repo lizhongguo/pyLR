@@ -12,7 +12,7 @@ class Tag:
 class VT:
     """ 终结符
     """    
-    def __init__(self) -> None:
+    def __init__(self, tag, value) -> None:
         self.tag = None
         self.value = None
     
@@ -26,11 +26,14 @@ class VT:
     def __hash__(self) -> int:
         return hash(self.tag) ^ hash(self.value)
 
+    def __str__(self) -> str:
+        return 'VT(tag: %s, value: %s))' % (self.tag, str(self.value)) 
+
 class VN:
     """ 非终结符
     """    
-    def __init__(self) -> None:
-        self.tag = None
+    def __init__(self, tag) -> None:
+        self.tag = tag
 
     def __eq__(self, o: object) -> bool:
         if not o:
@@ -41,6 +44,12 @@ class VN:
 
     def __hash__(self) -> int:
         return hash(self.tag)
+
+    def __str__(self) -> str:
+        return 'VN(tag: %s))' % (self.tag, ) 
+
+# 特殊终结符，表示空值
+EPSILON = VT('epsilon','')
 
 class Rule:
     # 推导规则
@@ -111,17 +120,43 @@ def constructFirstSet(rules:dict[VN,Rule]):
                             First[token] = set()
                             continue
 
-                        # 空集是任何集合的子集                        
                         if First[token].issubset(First[rule.parent]):
                             continue
 
                         First[rule.parent] |= First[token]
                         updated=True
 
-                        # 可推出sigma空集，继续
-                        if set() not in rules[token]:
+                        # 可推出空匹配，将下一个token的First集合加入parentVN
+                        if (EPSILON,) not in rules[token].children:
                             break
 
+    return First
+
+
+def testConstructFirstSet():
+    E, E_, T, T_, F, PLUS, MUL, LB, RB, ID = VN('E'), VN('E_'), VN('T'), VN('T_'), VN('F'), VT('PLUS','+'), VT('MUL','*'), VT('LB','('), VT('RB', ')'), VT('ID', 'id')
+
+
+    rule_E = Rule(E)
+    rule_E.addChild((T, E_))
+
+    rule_E_ = Rule(E_)
+    rule_E_.addChild((PLUS, T, E_))
+    rule_E_.addChild((EPSILON,))
+
+    rule_T = Rule(T)
+    rule_T.addChild((F,T_))
+
+    rule_T_ = Rule(T_)
+    rule_T_.addChild((MUL,F,T_))
+    rule_T_.addChild((EPSILON,))
+
+    rule_F = Rule(F)
+    rule_F.addChild((LB, E, RB))
+    rule_F.addChild((ID,))
+
+    rules = {E:rule_E, E_:rule_E_, T:rule_T, T_:rule_T_, F:rule_F}
+    print(constructFirstSet(rules))
 
 # 构造Follow集
 def constructFollowSet():
@@ -147,4 +182,4 @@ def parseExpression():
     pass
 
 if __name__ == '__main__':
-    pass
+    testConstructFirstSet()
