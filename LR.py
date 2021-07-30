@@ -1,6 +1,7 @@
+from collections import defaultdict
 from enum import Enum
 import re
-from typing import ForwardRef, Iterable
+from typing import ForwardRef, ItemsView, Iterable
 
 class Tag:
     # 非终结符
@@ -116,20 +117,17 @@ class ProjectItem:
 class ProjectItemExtends:
     # 项目, 某个规则的前pos个条件已经满足
     # 每一个项目由项目id, 和项目位置, 和展望符唯一标定
-    def __init__(self, rule:SingleRule, pos:int, expectedVT:set[VT]) -> None:
+    def __init__(self, rule:SingleRule, pos:int, expectedVT:Iterable[VT]) -> None:
         self.projectItem = ProjectItem(rule, pos)
 
         # 展望符
-        self.expectedVT = set( vt for vt in expectedVT)
+        self.expectedVT = frozenset( vt for vt in expectedVT)
 
     def nextToken(self):
         return self.projectItem.nextToken()
 
     def __hash__(self) -> int:
-        v = 0
-        for vt in self.expectedVT:
-            v ^= hash(vt)
-        return hash(self.projectItem) ^ v
+        return hash(self.projectItem) ^ hash(self.expectedVT)
 
     def __eq__(self, o: object) -> bool:
         if o is None:
@@ -140,44 +138,20 @@ class ProjectItemExtends:
 
 class Project:
     # 项目集
-    def __init__(self) -> None:        
-        self.items = set()
-
-    def addItem(self, item:ProjectItemExtends):
-        if isinstance(item, set):
-            self.items |= item
-            return
-        self.items.add(item)
-
-    def __hash__(self) -> int:
-        v = 0
-        for item in self.items:
-            v ^= hash(item)
-        return v
-
-    def __eq__(self, o: object) -> bool:
-        if o is None:
-            return False
-        if isinstance(o, self.__class__):
-            return self.items == o.items
-        return False
-
-class ProjectExtends:
-    # 项目集
-    # 项目 -> 展望符
-    def __init__(self) -> None:        
-        self.items = set()
-
-    def addItem(self, item:ProjectItemExtends):
-        if isinstance(item, set):
-            self.items |= item
-            return
-        self.items.add(item)
+    # 数据结构为 {ProjectItem: ExpectedVT}
+    # 一经构建，不允许修改
+    def __init__(self, items:Iterable[ProjectItemExtends]) -> None:        
+        self.items: dict[ProjectItem, frozenset[VT]] = dict()
+        for item in items:
+            if item.projectItem not in self.items:
+                self.items[item.projectItem] = frozenset(item.expectedVT)
+            else:
+                self.items[item.projectItem] = frozenset( item.expectedVT | self.items[item.projectItem])
 
     def __hash__(self) -> int:
         v = 0
         for item in self.items:
-            v ^= hash(item)
+            v ^= (hash(item) ^ hash(self.items[item])) 
         return v
 
     def __eq__(self, o: object) -> bool:
@@ -363,21 +337,7 @@ class LR_FSA:
     def __init__(self) -> None:
         pass
 
-# 计算某一项目的派生
-def deriveItem(rules:dict[VN, Rule], First:dict[VN, VT], curItem:ProjectItemExtends):
-    nextToken =  curItem.nextToken()
-    expectedVT = set(curItem.expectedVT)
-
-    nextItems = set()
-    if not nextToken:
-        # 规约项目没有后继
-        return nextItems
-
-    # 接收nextToken, 状态转移
-    coreToExpectedVT:dict[ProjectItem, set[VT]] = dict()
-    coreToExpectedVT[ProjectItem(curItem.projectItem.rule, curItem.projectItem.pos+1)] = expectedVT
-
-    # nextItems.add(ProjectItemExtends(curItem.rule, curItem.pos+1, curItem.expectedVT))
+def closure(rules:dict[VN, Rule], coreToExpectedVT:dict[ProjectItem, set[VT]], First:dict[VN, VT]):
     
     # 计算项目闭包
     updated = True
@@ -398,13 +358,60 @@ def deriveItem(rules:dict[VN, Rule], First:dict[VN, VT], curItem:ProjectItemExte
                         coreToExpectedVT[derivedProjectItem] |= followSet
                         updated = True
     
+    return [ProjectItemExtends(projectItem, coreToExpectedVT[projectItem]) for projectItem in coreToExpectedVT]
+
+# 计算某一项目的派生
+def deriveItem(rules:dict[VN, Rule], First:dict[VN, VT], curItem:ProjectItemExtends):
+    nextToken =  curItem.nextToken()
+    expectedVT = set(curItem.expectedVT)
+
+    if not nextToken:
+        # 规约项目没有后继
+        return []
+
+    # 接收nextToken, 状态转移
+    coreToExpectedVT:dict[ProjectItem, set[VT]] = dict()
+    coreToExpectedVT[ProjectItem(curItem.projectItem.rule, curItem.projectItem.pos+1)] = expectedVT
+    
+    # 计算项目闭包
+    updated = True
+    while updated:
+        updated = False
+        for projectItem in coreToExpectedVT:
+            if isinstance(projectItem.nextToken(), VN):
+                rule = rules[projectItem.nextToken()]
+                for child in rule.children:
+                    followSet = getFirstOfSeq(First, projectItem.restToken() + coreToExpectedVT[projectItem])
+                    derivedProjectItem = ProjectItem(SingleRule(rule.parent,child), 0)
+
+                    if derivedProjectItem not in coreToExpectedVT:
+                        coreToExpectedVT[derivedProjectItem] = set()
+                        updated = True
+                    
+                    if not followSet.issubset(coreToExpectedVT[derivedProjectItem]):
+                        coreToExpectedVT[derivedProjectItem] |= followSet
+                        updated = True
+    
+    return [ProjectItemExtends(projectItem, coreToExpectedVT[projectItem]) for projectItem in coreToExpectedVT]
+
     # 返回项目集合
 
 # 构建LR(1)自动机
 def constructLR1(rules:dict[VN, Rule], beginning:VN):
     # 自动机定义
-    # 项目集定义
     # 动作状态
+
+    # 项目集定义
+
+    # 构造First集合
+    First = constructFirstSet(rules)
+
+    # 将终结符放入开始文法
+    assert len(rules[beginning].children) == 1
+
+    projectIdx = 0
+    Projects = dict()
+
     pass
 
 def testConstructFollowSet():
