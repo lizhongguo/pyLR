@@ -2,6 +2,7 @@ from collections import defaultdict
 from enum import Enum
 import re
 from typing import ForwardRef, ItemsView, Iterable
+import queue
 
 class Tag:
     # 非终结符
@@ -102,7 +103,7 @@ class ProjectItem:
         return self.rule.child[self.pos]
 
     def restToken(self):
-        return self.rule.child[self.pos]
+        return self.rule.child[self.pos+1]
 
     def __hash__(self) -> int:
         return hash(self.rule) ^ hash(self.pos)
@@ -337,8 +338,10 @@ class LR_FSA:
     def __init__(self) -> None:
         pass
 
-def closure(rules:dict[VN, Rule], coreToExpectedVT:dict[ProjectItem, set[VT]], First:dict[VN, VT]):
-    
+def closure(rules:dict[VN, Rule], First:dict[VN, VT], coreToExpectedVT:dict[ProjectItem, set[VT]]):
+    if not coreToExpectedVT:
+        return None
+
     # 计算项目闭包
     updated = True
     while updated:
@@ -360,57 +363,83 @@ def closure(rules:dict[VN, Rule], coreToExpectedVT:dict[ProjectItem, set[VT]], F
     
     return [ProjectItemExtends(projectItem, coreToExpectedVT[projectItem]) for projectItem in coreToExpectedVT]
 
-# 计算某一项目的派生
-def deriveItem(rules:dict[VN, Rule], First:dict[VN, VT], curItem:ProjectItemExtends):
-    nextToken =  curItem.nextToken()
-    expectedVT = set(curItem.expectedVT)
 
-    if not nextToken:
-        # 规约项目没有后继
-        return []
+# 计算某一项目的后继派生
+def deriveProject(rules:dict[VN, Rule], First:dict[VN, VT], project:Project, tokens:Iterable):
+    results = dict()
+    for token in tokens:
+        coreToExpectedVT:dict[ProjectItem, set[VT]] = dict()
+        for curItem in project.items:
+            if token is not curItem.nextToken():
+                continue
 
-    # 接收nextToken, 状态转移
-    coreToExpectedVT:dict[ProjectItem, set[VT]] = dict()
-    coreToExpectedVT[ProjectItem(curItem.projectItem.rule, curItem.projectItem.pos+1)] = expectedVT
-    
-    # 计算项目闭包
-    updated = True
-    while updated:
-        updated = False
-        for projectItem in coreToExpectedVT:
-            if isinstance(projectItem.nextToken(), VN):
-                rule = rules[projectItem.nextToken()]
-                for child in rule.children:
-                    followSet = getFirstOfSeq(First, projectItem.restToken() + coreToExpectedVT[projectItem])
-                    derivedProjectItem = ProjectItem(SingleRule(rule.parent,child), 0)
+            # 接收nextToken, 状态转移, pos+1, 展望符不变
+            newProjectItem = ProjectItem(curItem.rule, curItem.pos+1)
+            if newProjectItem not in coreToExpectedVT:
+                coreToExpectedVT[newProjectItem] = set()
+            coreToExpectedVT[newProjectItem] |= project.items[curItem]
 
-                    if derivedProjectItem not in coreToExpectedVT:
-                        coreToExpectedVT[derivedProjectItem] = set()
-                        updated = True
-                    
-                    if not followSet.issubset(coreToExpectedVT[derivedProjectItem]):
-                        coreToExpectedVT[derivedProjectItem] |= followSet
-                        updated = True
-    
-    return [ProjectItemExtends(projectItem, coreToExpectedVT[projectItem]) for projectItem in coreToExpectedVT]
+        results[token] = Project(closure(rules,First,coreToExpectedVT))
 
-    # 返回项目集合
+    return results
 
 # 构建LR(1)自动机
 def constructLR1(rules:dict[VN, Rule], beginning:VN):
     # 自动机定义
     # 动作状态
 
+    # 文法定义
+    # 文法token序列
+    E, E_, T, T_, F, PLUS, MUL, LB, RB, ID = VN('E'), VN('E_'), VN('T'), VN('T_'), VN('F'), VT('PLUS','+'), VT('MUL','*'), VT('LB','('), VT('RB', ')'), VT('ID', 'id')
+
+    S = VN('S')
+
+    tokens = [S, E, E_, T, T_, F, PLUS, MUL, LB, RB, ID]
+
+    rule_S = Rule(S)
+    rule_S.addChild((E,))
+    beginning = S
+
+    rule_E = Rule(E)
+    rule_E.addChild((T, E_))
+
+    rule_E_ = Rule(E_)
+    rule_E_.addChild((PLUS, T, E_))
+    rule_E_.addChild((EPSILON,))
+
+    rule_T = Rule(T)
+    rule_T.addChild((F,T_))
+
+    rule_T_ = Rule(T_)
+    rule_T_.addChild((MUL,F,T_))
+    rule_T_.addChild((EPSILON,))
+
+    rule_F = Rule(F)
+    rule_F.addChild((LB, E, RB))
+    rule_F.addChild((ID,))
+
+    rules = {E:rule_E, E_:rule_E_, T:rule_T, T_:rule_T_, F:rule_F}
+
     # 项目集定义
+    projectIdx = 0
+    projects = dict()
 
     # 构造First集合
     First = constructFirstSet(rules)
 
     # 将终结符放入开始文法
     assert len(rules[beginning].children) == 1
+    # 计算开始项目集
+    headProject = Project(closure(rules, First, {ProjectItem(SingleRule(rules[beginning].parent, rules[beginning].children[0]),0):set((END,))}))
+    projects[headProject] = projectIdx
 
-    projectIdx = 0
-    Projects = dict()
+    # 计算后继项目集，并不断更新，直到没有新的项目集出现
+    projectQueue:queue.Queue[Project] = queue.Queue()
+    projectQueue.put(headProject)
+
+    while not projectQueue.empty():
+        project = projectQueue.get()
+        deriveProject(rules,First,project,tokens)
 
     pass
 
