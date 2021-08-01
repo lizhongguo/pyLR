@@ -350,10 +350,14 @@ def closure(rules:dict[VN, Rule], First:dict[VN, VT], coreToExpectedVT:dict[Proj
     updated = True
     while updated:
         updated = False
+
+        # dict在运行时不允许修改, 重新设计更新算法
         for projectItem in coreToExpectedVT:
             if isinstance(projectItem.nextToken(), VN):
                 rule = rules[projectItem.nextToken()]
                 for child in rule.children:
+
+                    # 还是需要改变, 展望符作为follow集后加进去
                     followSet = getFirstOfSeq(First, projectItem.restToken() + tuple(coreToExpectedVT[projectItem]))
                     derivedProjectItem = ProjectItem(SingleRule(rule.parent,child), 0)
 
