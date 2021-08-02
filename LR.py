@@ -87,14 +87,14 @@ class SingleRule:
         return self.parent == o.parent and self.child == o.child
 
     def __str__(self) -> str:
-        return '%s : %s' % (str(self.parent), ','.join([token for token in self.child]))
+        return '%s : %s' % (str(self.parent), ','.join([str(token) for token in self.child]))
 
 class ProjectItem:
     # 项目, 某个规则的前pos个条件已经满足
     # 每一个项目由项目id, 和项目位置唯一标定
     def __init__(self, rule:SingleRule, pos:int) -> None:
         self.rule = rule
-        self.pos = 0
+        self.pos = pos
 
         # 空推导式直接进入规约状态
         if self.pos<len(self.rule.child) and self.rule.child[self.pos] == EPSILON:
@@ -272,7 +272,7 @@ def testConstructFirstSet():
     printSet(First)
 
 # 获取某个序列的First集合
-def getFirstOfSeq(First:dict[VN, VT], seq:Iterable):
+def getFirstOfSeq(First:dict[VN, VT], seq:Iterable, followSet:set[VT]=None):
     results = set()
 
     if len(seq) == 0:
@@ -293,6 +293,9 @@ def getFirstOfSeq(First:dict[VN, VT], seq:Iterable):
                 if EPSILON in results:
                     results.remove(EPSILON)
                 return results
+
+    if EPSILON in results and followSet is not None:
+        return results | followSet
 
     return results
 
@@ -351,6 +354,8 @@ def closure(rules:dict[VN, Rule], First:dict[VN, VT], coreToExpectedVT:dict[Proj
     while updated:
         updated = False
 
+        tmpCoreToExpectedVT = dict()
+
         # dict在运行时不允许修改, 重新设计更新算法
         for projectItem in coreToExpectedVT:
             if isinstance(projectItem.nextToken(), VN):
@@ -358,16 +363,23 @@ def closure(rules:dict[VN, Rule], First:dict[VN, VT], coreToExpectedVT:dict[Proj
                 for child in rule.children:
 
                     # 还是需要改变, 展望符作为follow集后加进去
-                    followSet = getFirstOfSeq(First, projectItem.restToken() + tuple(coreToExpectedVT[projectItem]))
+                    followSet = getFirstOfSeq(First, projectItem.restToken(), coreToExpectedVT[projectItem])
                     derivedProjectItem = ProjectItem(SingleRule(rule.parent,child), 0)
 
+                    # if derivedProjectItem not in coreToExpectedVT:
+                    #     coreToExpectedVT[derivedProjectItem] = set()
+                    #     updated = True
                     if derivedProjectItem not in coreToExpectedVT:
-                        coreToExpectedVT[derivedProjectItem] = set()
+                        tmpCoreToExpectedVT[derivedProjectItem] = followSet
                         updated = True
-                    
+                        continue
+
                     if not followSet.issubset(coreToExpectedVT[derivedProjectItem]):
-                        coreToExpectedVT[derivedProjectItem] |= followSet
+                        tmpCoreToExpectedVT[derivedProjectItem] = coreToExpectedVT[derivedProjectItem] | followSet
                         updated = True
+        
+        for projectItem in tmpCoreToExpectedVT:
+            coreToExpectedVT[projectItem] = tmpCoreToExpectedVT[projectItem]
     
     return [ProjectItemExtends(projectItem.rule,projectItem.pos, coreToExpectedVT[projectItem]) for projectItem in coreToExpectedVT]
 
@@ -444,9 +456,17 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
     assert len(rules[beginning].children) == 1
     child = list(rules[beginning].children)[0]
 
+    def printProject(project:Project):
+        print('project begin')
+        if project is not None:
+            for item in project.items:
+                print(str(item.rule), item.pos)
+        print('project end\n')
+
     # 计算开始项目集
     headProject = Project(closure(rules, First, {ProjectItem(SingleRule(rules[beginning].parent, child),0):set([END,])}))
     projects[headProject] = projectIdx
+    printProject(headProject)
 
     # 计算后继项目集，并不断更新，直到没有新的项目集出现
     projectQueue:queue.Queue[Project] = queue.Queue()
@@ -457,20 +477,19 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
     # {src: token -> dst}
     transformMap:dict[Project,dict[object,Project]] = dict()
 
-    def printProject(project:Project):
-        print('project begin')
-        for item in project.items:
-            print(str(item.rule), item.pos)
-        print('project end\n')
 
     while not projectQueue.empty():
         project = projectQueue.get()
+        if project in transformMap:
+            continue
         token_to_project = deriveProject(rules,First,project,tokens)
+        transformMap[project] = dict()
         for token in token_to_project:
             print(str(token))
             printProject(token_to_project[token])
-
-        transformMap[project] = {token:token_to_project[token] for token in token_to_project}
+            transformMap[project][token] = token_to_project[token]
+            if token_to_project[token] not in transformMap:
+                projectQueue.put(token_to_project[token])
 
     # 打印结果
 
