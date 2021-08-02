@@ -419,7 +419,7 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
 
     S = VN('S')
 
-    tokens = [S, E, E_, T, T_, F, PLUS, MUL, LB, RB, ID]
+    tokens = [E, E_, T, T_, F, PLUS, MUL, LB, RB, ID]
 
     rule_S = Rule(S)
     rule_S.addChild((E,))
@@ -447,7 +447,7 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
 
     # 项目集定义
     projectIdx = 0
-    projects = dict()
+    projectToIdx = dict()
 
     # 构造First集合
     First = constructFirstSet(rules)
@@ -465,11 +465,13 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
 
     # 计算开始项目集
     headProject = Project(closure(rules, First, {ProjectItem(SingleRule(rules[beginning].parent, child),0):set([END,])}))
-    projects[headProject] = projectIdx
     printProject(headProject)
 
     # 计算后继项目集，并不断更新，直到没有新的项目集出现
     projectQueue:queue.Queue[Project] = queue.Queue()
+    projectToIdx[headProject] = projectIdx
+    projectIdx += 1
+
     projectQueue.put(headProject)
 
     # 记录状态转移表
@@ -480,17 +482,19 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
 
     while not projectQueue.empty():
         project = projectQueue.get()
-        if project in transformMap:
-            continue
         token_to_project = deriveProject(rules,First,project,tokens)
         transformMap[project] = dict()
         for token in token_to_project:
-            print(str(token))
-            printProject(token_to_project[token])
-            transformMap[project][token] = token_to_project[token]
-            if token_to_project[token] not in transformMap:
-                projectQueue.put(token_to_project[token])
+            nextProject = token_to_project[token]
+            transformMap[project][token] = nextProject
+            if nextProject is not None and nextProject not in projectToIdx:
+                projectToIdx[nextProject] = projectIdx
+                projectIdx += 1
+                projectQueue.put(nextProject)
+                print(str(token))
+                printProject(nextProject)
 
+    print(projectIdx)
     # 打印结果
 
 def testConstructFollowSet():
