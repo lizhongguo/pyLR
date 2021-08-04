@@ -3,6 +3,7 @@ from enum import Enum
 import re
 from typing import ForwardRef, ItemsView, Iterable
 import queue
+import graphviz
 
 class Tag:
     # 非终结符
@@ -166,6 +167,14 @@ class Project:
             return self.items == o.items
         return False
 
+    def __str__(self) -> str:
+        itemStr = []
+        for item in self.items:
+            childStr = list(c.tag for c in item.rule.child)
+            childStr.insert(item.pos, '~')
+            itemStr.append('%s -> %s, (%s)' % (item.rule.parent.tag, ' '.join(childStr), ','.join(token.tag for token in self.items[item]))) 
+        return '\n'.join(itemStr)
+
 
 class NFA:
     def __init__(self) -> None:
@@ -277,6 +286,9 @@ def getFirstOfSeq(First:dict[VN, VT], seq:Iterable, followSet:set[VT]=None):
 
     if len(seq) == 0:
         results.add(EPSILON)
+        if EPSILON in results and followSet is not None:
+            results.remove(EPSILON)
+            return results | followSet
         return results
     
     for token in seq:
@@ -295,6 +307,7 @@ def getFirstOfSeq(First:dict[VN, VT], seq:Iterable, followSet:set[VT]=None):
                 return results
 
     if EPSILON in results and followSet is not None:
+        results.remove(EPSILON)
         return results | followSet
 
     return results
@@ -408,6 +421,22 @@ def deriveProject(rules:dict[VN, Rule], First:dict[VN, VT], project:Project, tok
 
     return results
 
+def visLR1(transformMap:dict[Project,dict[object,Project]], projectToIdx:dict[Project, int]):
+    e = graphviz.Digraph('ER', filename='er.gv', engine='dot',graph_attr={'size':'100,50'})
+    # e.attr(rankdir='LR')
+    e.attr('node', shape='box')
+
+    for srcProject in transformMap:
+        e.node('%d' % projectToIdx[srcProject], label='P%d\n%s' % (projectToIdx[srcProject], str(srcProject)), fontsize='6')
+
+    for srcProject in transformMap:
+        for token in transformMap[srcProject]:
+            dstProject = transformMap[srcProject][token]
+            if dstProject:
+                e.edge('%d' % projectToIdx[srcProject],'%d' % projectToIdx[dstProject], token.tag, fontsize='6', arrowsize='1.0')
+
+    e.render(filename='LR1', view=True, format='pdf')
+
 # 构建LR(1)自动机
 def constructLR1(rules:dict[VN, Rule], beginning:VN):
     # 自动机定义
@@ -415,7 +444,7 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
 
     # 文法定义
     # 文法token序列
-    E, E_, T, T_, F, PLUS, MUL, LB, RB, ID = VN('E'), VN('E_'), VN('T'), VN('T_'), VN('F'), VT('PLUS','+'), VT('MUL','*'), VT('LB','('), VT('RB', ')'), VT('ID', 'id')
+    E, E_, T, T_, F, PLUS, MUL, LB, RB, ID = VN('E'), VN('E_'), VN('T'), VN('T_'), VN('F'), VT('Plus','+'), VT('Mul','*'), VT('Lb','('), VT('Rb', ')'), VT('Id', 'id')
 
     S = VN('S')
 
@@ -459,8 +488,9 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
     def printProject(project:Project):
         print('project begin')
         if project is not None:
-            for item in project.items:
-                print(str(item.rule), item.pos)
+            print(str(project))
+            # for item in project.items:
+                # print(str(item.rule), item.pos, ','.join(str(vt) for vt in project.items[item]))
         print('project end\n')
 
     # 计算开始项目集
@@ -470,6 +500,7 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
     # 计算后继项目集，并不断更新，直到没有新的项目集出现
     projectQueue:queue.Queue[Project] = queue.Queue()
     projectToIdx[headProject] = projectIdx
+    projectLists = [headProject]
     projectIdx += 1
 
     projectQueue.put(headProject)
@@ -488,14 +519,15 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN):
             nextProject = token_to_project[token]
             transformMap[project][token] = nextProject
             if nextProject is not None and nextProject not in projectToIdx:
+                print(projectIdx)
                 projectToIdx[nextProject] = projectIdx
+                projectLists.append(nextProject)
                 projectIdx += 1
                 projectQueue.put(nextProject)
                 print(str(token))
                 printProject(nextProject)
-
-    print(projectIdx)
     # 打印结果
+    visLR1(transformMap, projectToIdx)
 
 def testConstructFollowSet():
     E, E_, T, T_, F, PLUS, MUL, LB, RB, ID = VN('E'), VN('E_'), VN('T'), VN('T_'), VN('F'), VT('PLUS','+'), VT('MUL','*'), VT('LB','('), VT('RB', ')'), VT('ID', 'id')
