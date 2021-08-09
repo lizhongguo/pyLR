@@ -7,7 +7,7 @@ class DFA:
     """
     error = -1
 
-    def __init__(self, states: set[int], stateMap: dict[int, dict[str, int]], acceptedState: set[int], beginningState: int) -> None:
+    def __init__(self, stateMap: dict[int, dict[str, int]], acceptedState: set[int], beginningState: int) -> None:
         """__init__ 可以看作一个有向图, 点表示状态, 边表示接收某些输入时, 需要转移状态
             初始状态为0
         Args:
@@ -43,7 +43,7 @@ class NFA:
         空串''表示空边
     """
 
-    def __init__(self, states: set[int], stateMap: dict[int, dict[str, int]], acceptedState: set[int], beginningState: int, chars: set[str]) -> None:
+    def __init__(self, stateMap: dict[int, dict[str, int]], acceptedState: set[int], beginningState: int, chars: set[str]) -> None:
         """__init__ 可以看作一个有向图, 点表示状态, 边表示接收某些输入时, 需要转移状态
             初始状态为0
         Args:
@@ -119,7 +119,9 @@ class NFA:
 
                 stateMap[statesToIdx[states]][c] = statesToIdx[nextStates]
 
-        
+        acceptedState = self.closure(self.acceptedState)
+        return DFA(stateMap, acceptedState, 0)
+
 
 class MNFA:
     """ 允许多个目标的NFA
