@@ -95,7 +95,9 @@ class NFA:
 
         stateMap: dict[int, dict[str, int]] = dict()
         statesToIdx: dict[frozenset, int] = dict()
-        statesIdx: int = 0
+        statesIdx: int = 1
+
+        statesToIdx[headStates] = 0
 
         while not q.empty():
             states = q.get()
@@ -104,9 +106,20 @@ class NFA:
                 for s in states:
                     if s in self.stateMap and self.stateMap[s].get(c, default=-1) >= 0:
                         nextStates.add(self.stateMap[s].get(c))
+                
+                if not nextStates:
+                    continue
+
                 nextStates = self.closure(nextStates)
 
+                if nextStates not in statesToIdx:
+                    statesToIdx[nextStates] = statesIdx
+                    statesIdx += 1
+                    q.put(nextStates)
 
+                stateMap[statesToIdx[states]][c] = statesToIdx[nextStates]
+
+        
 
 class MNFA:
     """ 允许多个目标的NFA
