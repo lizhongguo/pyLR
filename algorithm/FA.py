@@ -15,6 +15,7 @@ class Stack(list):
 def RegExpToDFA(pattern:str)->DFA:
     """RegExpToDFA 正则表达式，先构建NFA，再构造DFA
         支持的正则表达式语法, *:匹配0,1,n次, +:匹配1,n次, ?:匹配0,1次, [a,b]:匹配a或者b, ()分组
+        后续需要添加对转义字符的支持
         使用栈来处理正则表达式语法
         正则表达式构造NFA:
             1) ab : a前后增加两个状态 0-a->1-epsilon->2-b->3
