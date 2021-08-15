@@ -3,8 +3,11 @@ from entity.FA import DFA
 nodeIdx = 0
 
 class Stack(list):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, e=None) -> None:
+        if not e:
+            super().__init__()
+        else:
+            super().__init__(e)
 
     def tail(self) :
         return self.__getitem__(-1)
@@ -38,71 +41,74 @@ def RegExpToDFA(pattern:str)->DFA:
     graph = DirectedGraph()
 
     edge = addEdge(graph,None,None,'')    
-    edgeStack:Stack[Edge] = Stack([edge])
+    edgeStack = Stack([(edge.head, edge)])
     nodeStack:Stack[Node] = Stack()
 
     for c in pattern:
         if c == '(':
             # 保存起始点
             edge = addEdge(graph,None,None,'')
-            addEdge(graph,edgeStack.tail().tail,edge.head,'')
 
-            edgeStack.append(edge)
+            head, prevEdge = edgeStack.pop()
+            addEdge(graph,prevEdge.tail,edge.head,'')
+
+            edgeStack.append((head,edge))
             nodeStack.append(edge.head)
-
 
         elif c == ')':
             # 虚边 仅表示head可以到达tail
-            edge = Edge(nodeStack.pop(), edgeStack.tail().tail)
-            edgeStack.pop()
-            edgeStack.append(edge)
+            head, prevEdge = edgeStack.pop()
+            edge = Edge(nodeStack.pop(), prevEdge.tail)
+            edgeStack.append((head,edge))
 
         elif c == '[':
             edgeStack.append(c)
-            edgeStack.append(addEdge(graph,None,None,''))
+            edge = addEdge(graph,None,None,'')
+            edgeStack.append((edge.head, edge))
 
         elif c == ']':
             tailEdge = addEdge(graph,None,None,'')
             headEdge = addEdge(graph,None,None,'')
             # 向前寻找prevEdge
             while edgeStack.tail() != '[':
-                edge = edgeStack.pop()
-                addEdge(graph, headEdge.tail, edge.head, '')
+                head, edge = edgeStack.pop()
+                addEdge(graph, headEdge.tail, head, '')
                 addEdge(graph, edge.tail, tailEdge.head, '')
             edgeStack.pop()
-            prevEdge = edgeStack.pop()
-            addEdge(graph, prevEdge.tail, headEdge.head)
-            edgeStack.append(tailEdge)
+            head, prevEdge = edgeStack.pop()
+            addEdge(graph, prevEdge.tail, headEdge.head, '')
+            edgeStack.append((head, tailEdge))
             
         elif c == ',':
-            edgeStack.append(addEdge(graph,None,None,''))
+            edge = addEdge(graph,None,None,'')
+            edgeStack.append((edge.head, edge))
 
         elif c == '?':
-            edge = edgeStack.pop()
-
-            edgeStack.append(addEdge(graph, edge.head, edge.tail, ''))
-
-            edgeStack.append(edge)
+            head, edge = edgeStack.pop()
+            edgeStack.append((head, addEdge(graph, edge.head, edge.tail, '')))
 
         elif c == '*':
-            edge = edgeStack.pop()
+            head, edge = edgeStack.pop()
             addEdge(graph, edge.tail, edge.head, '')
-
-            edgeStack.append(addEdge(graph, edge.head, None, ''))
+            edgeStack.append((head,addEdge(graph, edge.head, None, '')))
 
         elif c == '+':
-            edge = edgeStack.pop()
+            head, edge = edgeStack.pop()
             addEdge(graph, edge.tail, edge.head, '')
-
-            edgeStack.append(addEdge(graph, edge.tail, None, ''))
+            edgeStack.append((head, addEdge(graph, edge.tail, None, '')))
 
         else:
             # 为c创建首尾状态,然后与旧状态连接
             edge = addEdge(graph,None,None,c)
-            prevEdge:Edge = edgeStack.tail()
+            head, prevEdge =  edgeStack.pop()
             addEdge(graph, prevEdge.tail, edge.head, '')
 
-            edgeStack.pop()
-            edgeStack.append(edge)
+            edgeStack.append((head,edge))
 
+    graph.visualize()
+    assert len(nodeStack) == 0
+    assert len(edgeStack) == 1
+    _, edge = edgeStack.pop()
+
+    acceptedState = edge.tail
 
