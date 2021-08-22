@@ -1,4 +1,4 @@
-from entity.Token import Token, VN,VT
+from entity.Token import END, Token, VN,VT
 
 class Rule:
     # 推导规则
@@ -18,6 +18,11 @@ class SingleRule:
     def __init__(self, parent:VN, child) -> None:
         self.parent = parent
         self.child:tuple = tuple(child)
+
+    def __len__(self):
+        if len(self.child) == 1 and self.child[0] == END:
+            return 0
+        return len(self.child)
 
     def __hash__(self) -> int:
         return hash(self.parent) ^ hash(self.child)

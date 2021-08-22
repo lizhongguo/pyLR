@@ -140,3 +140,6 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN, tokens:Iterable[Token]):
                 printItemSet(nextItemSet)
     # 打印结果
     visLR1(transformMap, itemSetToIdx)
+
+    # 生成自动机
+    

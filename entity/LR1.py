@@ -1,6 +1,7 @@
 from typing import Iterable
 from entity.Token import Token,VN,VT, EPSILON, END
 from entity.Rule import SingleRule,Rule
+from enum import Enum
 
 class Item:
     # 项目, 某个规则的前pos个条件已经满足
@@ -88,3 +89,59 @@ class ItemSet:
             childStr.insert(item.pos, '~')
             itemStr.append('%s -> %s, (%s)' % (item.rule.parent.tag, ' '.join(childStr), ','.join(token.tag for token in self.items[item]))) 
         return '\n'.join(itemStr)
+
+class ActionKind(Enum):
+    Shift = 0
+    Goto = 1
+    Reduce = 2
+
+class Action:
+    def __init__(self, kind:ActionKind, state:int , rule:SingleRule =  None) -> None:
+        self.kind = kind
+        self.state = state
+        self.rule = rule
+
+class AST:
+    def __init__(self, token:Token, child = None) -> None:
+        self.token = token
+        self.child = child
+
+
+class LR1_FSA:
+    def __init__(self, initState:int, stateToAction:dict) -> None:
+        self.initState = initState
+        self.stateToAction:dict[int, dict[Token, Action]] = stateToAction
+
+    def analyse(self, tokenStream:list[Token]):
+        # 状态栈, 输出栈, 输入栈
+        # 构建AST
+        stateStack = [self.initState]
+        inputStatck = []
+
+        idx = 0
+        followingToken = tokenStream[idx]
+        
+        while idx < len(tokenStream):
+            action = self.stateToAction[stateStack[-1]][followingToken]
+            #接收状态直接返回
+
+            if action.kind == ActionKind.Goto:
+                stateStack.append(action.state)
+                inputStatck.append(followingToken)
+                followingToken = tokenStream[idx]
+            
+            elif action.kind == ActionKind.Shift:
+                stateStack.append(action.state)
+                inputStatck.append(followingToken)
+
+                idx += 1
+                followingToken = tokenStream[idx]
+
+            elif action.kind == ActionKind.Reduce:
+                # 状态栈出栈, 输入栈出栈再入栈
+                stateStack = stateStack[:-len(action.rule)]
+                inputStatck = inputStatck[:-len(action.rule)]
+
+                # 输入插入一个规约结果
+                followingToken = action.rule.parent
+
