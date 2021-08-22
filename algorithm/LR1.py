@@ -1,7 +1,7 @@
 from typing import Iterable
 from entity.Token import Token, VN, VT, EPSILON, END
 from entity.Rule import Rule, SingleRule
-from entity.LR1 import ItemSet,Item,ItemExtends
+from entity.LR1 import Action, ActionKind, ItemSet,Item,ItemExtends, LR1_FSA
 from algorithm.Common import constructFirstSet, getFirstOfSeq
 import queue
 import graphviz
@@ -142,4 +142,32 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN, tokens:Iterable[Token]):
     visLR1(transformMap, itemSetToIdx)
 
     # 生成自动机
+    stateToAction:dict[int, dict[Token, Action]] = dict()
+    for itemSet in transformMap:
+
+        # 检查 itemSet中是否存在可规约项目
+        # 检查是否存在规约冲突
+        stateToAction[itemSetToIdx[itemSet]] = dict()
+        for item in itemSet.items:
+            if not item.nextToken():
+                # 增加规约结果
+                for token in itemSet.items[item]:
+                    if token in stateToAction[itemSetToIdx[itemSet]]:
+                        raise Exception("文法存在规则冲突")
+                    stateToAction[itemSetToIdx[itemSet]][token] = Action(ActionKind.Reduce, 0, item.rule)
+        
+        for token in transformMap[itemSet]:
+            if transformMap[itemSet][token] is None:
+                continue
+
+            if isinstance(token, VN):
+                stateToAction[itemSetToIdx[itemSet]][token] = \
+                    Action(ActionKind.Goto, itemSetToIdx[transformMap[itemSet][token]])
+            else:
+                stateToAction[itemSetToIdx[itemSet]][token] = \
+                    Action(ActionKind.Shift, itemSetToIdx[transformMap[itemSet][token]])
     
+    return LR1_FSA(0, stateToAction)
+
+
+
