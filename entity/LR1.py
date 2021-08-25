@@ -144,4 +144,3 @@ class LR1_FSA:
 
                 # 输入插入一个规约结果
                 followingToken = action.rule.parent
-
