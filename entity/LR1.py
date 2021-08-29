@@ -94,6 +94,7 @@ class ActionKind(Enum):
     Shift = 0
     Goto = 1
     Reduce = 2
+    Accept = 3
 
 class Action:
     def __init__(self, kind:ActionKind, state:int , rule:SingleRule =  None) -> None:
@@ -102,10 +103,10 @@ class Action:
         self.rule = rule
 
 class AST:
-    def __init__(self, token:Token, child = None) -> None:
-        self.token = token
-        self.child = child
-
+    def __init__(self, parent, rule = None, children = None) -> None:
+        self.rule:SingleRule = rule
+        self.parent:Token = parent
+        self.children:Iterable[AST] = children
 
 class LR1_FSA:
     def __init__(self, initState:int, stateToAction:dict) -> None:
@@ -114,34 +115,43 @@ class LR1_FSA:
 
     def analyse(self, tokenStream:list[Token]):
         # 状态栈, 输出栈, 输入栈
-        # 构建AST
         stateStack = [self.initState]
+
+        # 构建AST
         inputStatck = []
 
         idx = 0
-        followingToken = tokenStream[idx]
+        followingASTNode = AST(tokenStream[idx]) 
         
         while idx < len(tokenStream):
-            action = self.stateToAction[stateStack[-1]][followingToken]
+            action = self.stateToAction[stateStack[-1]][followingASTNode.parent]
             #接收状态直接返回
 
-            if action.kind == ActionKind.Goto:
+            if action.kind == ActionKind.Accept:
+                assert len(inputStatck) == 1 and len(stateStack) == 1
+                return inputStatck[0]
+
+            elif action.kind == ActionKind.Goto:
                 stateStack.append(action.state)
-                inputStatck.append(followingToken)
-                followingToken = tokenStream[idx]
+                inputStatck.append(followingASTNode)
+
+                followingASTNode = AST(tokenStream[idx])
             
             elif action.kind == ActionKind.Shift:
                 stateStack.append(action.state)
-                inputStatck.append(followingToken)
+                inputStatck.append(followingASTNode)
 
                 idx += 1
-                followingToken = tokenStream[idx]
+                followingASTNode = AST(tokenStream[idx])
 
             elif action.kind == ActionKind.Reduce:
                 # 状态栈出栈, 输入栈出栈再入栈
                 stateStack = stateStack[:-len(action.rule)]
+
+                # 构建AST
+                followingASTNode = AST(action.rule.parent, action.rule, inputStatck[-len(action.rule):])
                 inputStatck = inputStatck[:-len(action.rule)]
 
-                # 输入插入一个规约结果
-                followingToken = action.rule.parent
+                # # 输入插入一个规约结果
+                # followingToken = action.rule.parent
 

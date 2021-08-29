@@ -98,6 +98,8 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN, tokens:Iterable[Token]):
     assert len(rules[beginning].children) == 1
     child = list(rules[beginning].children)[0]
 
+    #  E_ : E
+
     def printItemSet(itemSet:ItemSet):
         print('ItemSet begin')
         if itemSet is not None:
@@ -154,7 +156,13 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN, tokens:Iterable[Token]):
                 for token in itemSet.items[item]:
                     if token in stateToAction[itemSetToIdx[itemSet]]:
                         raise Exception("文法存在规则冲突")
-                    stateToAction[itemSetToIdx[itemSet]][token] = Action(ActionKind.Reduce, 0, item.rule)
+
+                    # 接受状态
+                    if item == Item(SingleRule(rules[beginning].parent, child),1) and token == END:
+                        stateToAction[itemSetToIdx[itemSet]][token] = Action(ActionKind.Accept, -1, None) 
+                        continue
+                       
+                    stateToAction[itemSetToIdx[itemSet]][token] = Action(ActionKind.Reduce, -1, item.rule)
         
         for token in transformMap[itemSet]:
             if transformMap[itemSet][token] is None:
