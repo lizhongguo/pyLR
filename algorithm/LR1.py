@@ -1,7 +1,8 @@
+from entity.Graph import IndexedSet
 from typing import Iterable
 from entity.Token import Token, VN, VT, EPSILON, END
 from entity.Rule import Rule, SingleRule
-from entity.LR1 import Action, ActionKind, ItemSet,Item,ItemExtends, LR1_FSA
+from entity.LR1 import Action, ActionKind,  ItemSet,Item,ItemExtends, LR1_FSA
 from algorithm.Common import constructFirstSet, getFirstOfSeq
 import queue
 import graphviz
@@ -66,19 +67,19 @@ def deriveItemSet(rules:dict[VN, Rule], First:dict[VN, VT], itemSet:ItemSet, tok
 
     return results
 
-def visLR1(transformMap:dict[ItemSet,dict[object,ItemSet]], itemSetToIdx:dict[ItemSet, int]):
+def visLR1(transformMap:dict[ItemSet,dict[object,ItemSet]], itemSetToIdx:IndexedSet):
     e = graphviz.Digraph('ER', filename='er.gv', engine='dot',graph_attr={'size':'100,50'})
     # e.attr(rankdir='LR')
     e.attr('node', shape='box')
 
     for srcItemSet in transformMap:
-        e.node('%d' % itemSetToIdx[srcItemSet], label='P%d\n%s' % (itemSetToIdx[srcItemSet], str(srcItemSet)), fontsize='6')
+        e.node('%d' % itemSetToIdx.getIdx(srcItemSet), label='P%d\n%s' % (itemSetToIdx.getIdx(srcItemSet), str(srcItemSet)), fontsize='6')
 
     for srcItemSet in transformMap:
         for token in transformMap[srcItemSet]:
             dstItemSet = transformMap[srcItemSet][token]
             if dstItemSet:
-                e.edge('%d' % itemSetToIdx[srcItemSet],'%d' % itemSetToIdx[dstItemSet], token.tag, fontsize='6', arrowsize='1.0')
+                e.edge('%d' % itemSetToIdx.get(srcItemSet),'%d' % itemSetToIdx.getIdx(dstItemSet), token.tag, fontsize='6', arrowsize='1.0')
 
     e.render(filename='LR1', view=True, format='pdf')
 
@@ -88,9 +89,6 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN, tokens:Iterable[Token]):
     # 动作状态
 
     # 项目集定义
-    itemSetIdx = 0
-    itemSetToIdx = dict()
-
     # 构造First集合
     First = constructFirstSet(rules)
 
@@ -111,18 +109,15 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN, tokens:Iterable[Token]):
     printItemSet(headItemSet)
 
     # 计算后继项目集，并不断更新，直到没有新的项目集出现
+    indexedSet = IndexedSet()
     itemSetQueue:queue.Queue[ItemSet] = queue.Queue()
-    itemSetToIdx[headItemSet] = itemSetIdx
-    itemSetLists = [headItemSet]
-    itemSetIdx += 1
+    indexedSet.add(headItemSet)
 
     itemSetQueue.put(headItemSet)
-
     # 记录状态转移表
     # src 与 dst分别为项目集, token为vn或者vt
     # {src: token -> dst}
     transformMap:dict[ItemSet,dict[object,ItemSet]] = dict()
-
 
     while not itemSetQueue.empty():
         itemSet = itemSetQueue.get()
@@ -131,17 +126,13 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN, tokens:Iterable[Token]):
         for token in token_to_itemSet:
             nextItemSet = token_to_itemSet[token]
             transformMap[itemSet][token] = nextItemSet
-            if nextItemSet is not None and nextItemSet not in itemSetToIdx:
-                print(itemSetIdx)
-                itemSetToIdx[nextItemSet] = itemSetIdx
-                itemSetLists.append(nextItemSet)
-                itemSetIdx += 1
-
+            if nextItemSet is not None and nextItemSet not in indexedSet:
+                indexedSet.add(nextItemSet)
                 itemSetQueue.put(nextItemSet)
                 print(str(token))
                 printItemSet(nextItemSet)
     # 打印结果
-    visLR1(transformMap, itemSetToIdx)
+    visLR1(transformMap, indexedSet)
 
     # 生成自动机
     stateToAction:dict[int, dict[Token, Action]] = dict()
@@ -149,31 +140,31 @@ def constructLR1(rules:dict[VN, Rule], beginning:VN, tokens:Iterable[Token]):
 
         # 检查 itemSet中是否存在可规约项目
         # 检查是否存在规约冲突
-        stateToAction[itemSetToIdx[itemSet]] = dict()
+        stateToAction[indexedSet.getIdx(itemSet)] = dict()
         for item in itemSet.items:
             if not item.nextToken():
                 # 增加规约结果
                 for token in itemSet.items[item]:
-                    if token in stateToAction[itemSetToIdx[itemSet]]:
+                    if token in stateToAction[indexedSet.getIdx(itemSet)]:
                         raise Exception("文法存在规则冲突")
 
                     # 接受状态
                     if item == Item(SingleRule(rules[beginning].parent, child),1) and token == END:
-                        stateToAction[itemSetToIdx[itemSet]][token] = Action(ActionKind.Accept, -1, None) 
+                        stateToAction[indexedSet.getIdx(itemSet)][token] = Action(ActionKind.Accept, -1, None) 
                         continue
                        
-                    stateToAction[itemSetToIdx[itemSet]][token] = Action(ActionKind.Reduce, -1, item.rule)
+                    stateToAction[indexedSet.getIdx(itemSet)][token] = Action(ActionKind.Reduce, -1, item.rule)
         
         for token in transformMap[itemSet]:
             if transformMap[itemSet][token] is None:
                 continue
 
             if isinstance(token, VN):
-                stateToAction[itemSetToIdx[itemSet]][token] = \
-                    Action(ActionKind.Goto, itemSetToIdx[transformMap[itemSet][token]])
+                stateToAction[indexedSet.getIdx(itemSet)][token] = \
+                    Action(ActionKind.Goto, indexedSet.getIdx(transformMap[itemSet][token]))
             else:
-                stateToAction[itemSetToIdx[itemSet]][token] = \
-                    Action(ActionKind.Shift, itemSetToIdx[transformMap[itemSet][token]])
+                stateToAction[indexedSet.getIdx(itemSet)][token] = \
+                    Action(ActionKind.Shift, indexedSet.getIdx(transformMap[itemSet][token]))
     
     return LR1_FSA(0, stateToAction)
 

@@ -1,5 +1,29 @@
 import graphviz
 
+class IndexedSet:
+    def __init__(self) -> None:
+        self.data_dict = dict()
+        self.data_list = list()
+        self.data_len:int = 0
+
+    def add(self, e):
+        if e not in self.data_dict:
+            self.data_dict[e] = self.data_len
+            self.data_list.append(e)
+            self.data_len += 1
+
+    def __getitem__(self, idx):
+        return self.data_list[idx]
+
+    def getIdx(self, e):
+        return self.data_dict[e]
+
+    def __len__(self):
+        return self.data_len
+
+    def __contains__(self, e):
+        return e in self.data_dict
+
 class Node:
     def __init__(self, nodeId:int) -> None:
         self.nodeId:int = nodeId
