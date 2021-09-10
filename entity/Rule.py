@@ -2,9 +2,13 @@ from entity.Token import END, Token, VN,VT
 
 class Rule:
     # 推导规则
-    def __init__(self, parent:VN) -> None:
+    def __init__(self, parent:VN, children=None) -> None:
         self.parent = parent
         self.children = set()
+
+        if children:
+            for child in children:
+                self.children.add(tuple(child))
 
     def addChild(self, child):
         if child is None:
