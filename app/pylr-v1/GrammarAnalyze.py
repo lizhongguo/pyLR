@@ -63,31 +63,76 @@ def analyze(inputStr):
     state = 0
     idx = 0
 
-    def splitter(ch):
+    rules = dict()
+    parent = None
+    singleRule = list()
+
+    def isSplitter(ch):
         return ch == ' ' | ch == '\t' | ch == '\n' | ch == '\r'
 
     while idx < len(inputStr):
-        if splitter(inputStr[idx]):
+        while idx<len(inputStr) and isSplitter(inputStr[idx]):
             idx += 1
 
         if state == 0:
             if inputStr[idx] in string.ascii_letters:
-                #读入VN
+                #读入VN, 期望后续为分隔符或:
+                token = ''
+
+                while idx < len(inputStr) and inputStr[idx] in string.ascii_letters:
+                    token += inputStr[idx]
+                    idx += 1
+                
+
+                parent = VN(token)
+                if parent not in rules:
+                    rules[parent] = set()
+
                 state = 1
-                idx += 1
 
         elif state == 1:
             if inputStr[idx] == ':':
                 idx += 1
                 state = 2
+            else:
+                raise Exception('Invalid Format')
         
         elif state == 2:
-            # 读入Tokens,直到遇到 |
-            idx += 1
+            # 读入Tokens,直到遇到 | 或者; 或者 分割符
 
-            if state[idx] == '|':
-                state = 2
+            # "开头
+            if inputStr[idx] == '"':
+                idx += 1
+                if inputStr[idx] in string.ascii_letters:
+                    singleRule.append(VT(inputStr[idx], inputStr[idx]))
+                    assert inputStr[idx+1] == '"'
+                    idx += 2
+                elif inputStr[idx] == '\\':
+                    singleRule.append(VT(inputStr[idx+1], inputStr[idx+1]))
+                    assert inputStr[idx+2] == '"'
+                    idx += 3
+                else:
+                    raise Exception('Invalid Format')
+
+            elif inputStr[idx] in  string.ascii_letters:
+                token = ''
+
+                while idx < len(inputStr) and inputStr[idx] in string.ascii_letters:
+                    token += inputStr[idx]
+                    idx += 1
+                
+                singleRule.append(VN(token))
+
+
+            elif state[idx] == '|':
+                rules[parent].append(list(singleRule))
+                singleRule.clear()
+                idx += 1
+
             elif state[idx] == ';':
+                rules[parent].append(list(singleRule))
+                singleRule.clear()
+                idx += 1
                 state = 0
 
     if state != 0:
